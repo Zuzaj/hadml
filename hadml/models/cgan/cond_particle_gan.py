@@ -260,13 +260,17 @@ class CondParticleGANModule(LightningModule):
         )
 
         if optimizer_idx == 0:
-            return self._discriminator_step(
+            loss = self._discriminator_step(
                 cond_info, particle_type_data, x_generated, x_momenta, x_type_data
             )
+            self.log("Discriminator loss: ", loss, on_step=True, on_epoch=False, prog_bar=True)
+            return loss
 
         if optimizer_idx == 1:
-            return self._generator_step(particle_type_data, x_generated)
-
+            loss = self._generator_step(particle_type_data, x_generated)
+            self.log("Generator loss: ",loss, on_step=True, on_epoch=False, prog_bar=True)
+            return loss
+        
     def _update_gumbel_temp(self):
         progress = self.trainer.current_epoch / (self.trainer.max_epochs - 1)
         self.current_gumbel_temp = 1.0 - (1 - self.target_gumbel_temp) * progress
@@ -461,7 +465,9 @@ class CondParticleGANModule(LightningModule):
         self.val_swd(perf["swd"])
         self.val_particle_swd(perf["particle_swd"])
         self.val_kinematic_swd(perf["kinematic_swd"])
-
+        self.log("val_swd", perf["swd"], on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_particle_swd", perf["particle_swd"],on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_kinematic_swd", perf["kinematic_swd"],on_step=False, on_epoch=True, prog_bar=True)
         return perf
 
     def validation_epoch_end(self, outputs: List[Any]):
