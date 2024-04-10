@@ -62,7 +62,7 @@ class MLPModule(nn.Module):
                 input_dim, hidden_dims, output_dim, layer_norm, dropout, last_activation
             )
         )
-
+    #get output of each layer
     def get_layer_outputs(self, x, *args) -> List[torch.Tensor]:
         if len(args) > 0:
             x = torch.cat((x,) + args, dim=1)
@@ -75,15 +75,8 @@ class MLPModule(nn.Module):
     def forward(self, x, *args) -> torch.Tensor:
         if len(args) > 0:
             x = torch.cat((x,) + args, dim=1)
-        # last_layer = self.model(x)
-        # output_layers = []
-        # for layer in self.model:
-        #     x = layer(x)
-        #     output_layers.append(x)
         return self.model(x)
     
-
-
 
 class MLPParticleModule(nn.Module):
     def __init__(

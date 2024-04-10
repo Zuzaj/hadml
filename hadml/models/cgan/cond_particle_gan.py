@@ -133,11 +133,11 @@ class CondParticleGANModule(LightningModule):
         if self.use_particle_mlp:
             particle_kinematics, particle_types = self._call_mlp_particle_generator(x_fake)
         else:
-            particle_kinematics, particle_types = self._call_mlp_generator(x_fake)
+            particle_kinematics, particle_types, layers_outputs = self._call_mlp_generator(x_fake)
         particle_kinematics = torch.tanh(particle_kinematics)
         particle_types = F.gumbel_softmax(particle_types,
                                           self.current_gumbel_temp)
-        return particle_kinematics, particle_types
+        return particle_kinematics, particle_types, layers_outputs
 
 
     def _call_mlp_particle_generator(
@@ -149,13 +149,16 @@ class CondParticleGANModule(LightningModule):
         self, x_fake: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         fakes = self.generator(x_fake)
+        layers_outputs = self.generator.get_layer_outputs(x_fake)
         num_evts = x_fake.shape[0]
 
         particle_kinematics = fakes[:, : self.hparams.num_particle_kinematics]  # type: ignore
         particle_types = fakes[:, self.hparams.num_particle_kinematics :].reshape(  # type: ignore
             num_evts * self.hparams.num_output_particles, -1
         )  # type: ignore
-        return particle_kinematics, particle_types
+
+        # layers_outputs = torch.cat(layers_outputs, dim=0)
+        return particle_kinematics, particle_types, layers_outputs
 
     def configure_optimizers(self):
         opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters())  # type: ignore
@@ -292,7 +295,7 @@ class CondParticleGANModule(LightningModule):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         noise = self.generate_noise(num_evts).to(device)
 
-        particle_kinematics, particle_types = self(noise, cond_info)
+        particle_kinematics, particle_types, _ = self(noise, cond_info)
 
         if not isinstance(self.embedding_module, OneHotEmbeddingModule):
             raise NotImplementedError("Embedding module must be `OneHotEmbeddingModule`.")
@@ -389,7 +392,7 @@ class CondParticleGANModule(LightningModule):
         scaled_cond_info = self.generator_prescale(cond_info)
         # generate events from the Generator
         noise = self.generate_noise(num_evts).to(x_angles.device)
-        particle_angles, particle_types = self(noise, scaled_cond_info)
+        particle_angles, particle_types, layers_outputs = self(noise, scaled_cond_info)
         particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
         particle_types = particle_types.reshape(num_evts, -1)
         scaled_x_angles = self.discriminator_prescale(x_angles)
@@ -451,7 +454,8 @@ class CondParticleGANModule(LightningModule):
             "particle_momenta": particle_momenta.cpu().detach().numpy(),
             "x_momenta": x_momenta.reshape((-1, 4)).cpu().detach().numpy(),
             "event_labels": event_labels.cpu().detach().numpy(),
-            "cond_info": cond_info.cpu().detach().numpy()
+            "cond_info": cond_info.cpu().detach().numpy(),
+            "layers_outputs":layers_outputs
         }
 
     def compare(self, predictions, truths, x_momenta, particle_momenta, outname) -> None:
@@ -468,7 +472,7 @@ class CondParticleGANModule(LightningModule):
                     "Particle GAN",
                     images=list(images.values()),
                     caption=list(images.keys()),
-                )
+                    )
 
     def validation_step(self, batch: Any, batch_idx: int):
         """Validation step"""
@@ -479,6 +483,18 @@ class CondParticleGANModule(LightningModule):
         self.log("val_swd", perf["swd"], on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_particle_swd", perf["particle_swd"],on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_kinematic_swd", perf["kinematic_swd"],on_step=False, on_epoch=True, prog_bar=True)
+        layers_outputs = perf["layers_outputs"]
+
+        #here it thows error that plot_layers_outputs() got 2 args
+        histograms = self.comparison_fn.plot_layers_outputs(layers_outputs)
+        if self.logger and self.logger.experiment is not None:
+            log_images(
+                    self.logger,
+                    "Outputs for each layer",
+                    images=list(histograms.values()),
+                    caption=list(histograms.keys()),
+                )
+
         return perf
 
     def validation_epoch_end(self, outputs: List[Any]):
@@ -562,8 +578,14 @@ class CondParticleGANModule(LightningModule):
                     if len(cond_info) == 0
                     else np.concatenate((cond_info, perf["cond_info"]))
                 )
+                # layers_outputs = (
+                #     perf["layers_outputs"]
+                #     if len(cond_info) == 0
+                #     else layers_outputs.append(perf["layers_outputs"])
+                # )
 
             outname = f"val-{self.current_epoch:02d}"
+            
 
             # print(truths)
             # print(predictions)

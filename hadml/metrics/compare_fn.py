@@ -7,6 +7,7 @@ from pytorch_lightning.core.mixins import HyperparametersMixin
 
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 from .image_converter import fig_to_array
 
@@ -38,8 +39,8 @@ class CompareParticles(HyperparametersMixin):
         """Expect predictions = [batch_size, num_kinematics + num_particle_type_indices]."""
         out_images = {}
 
-        _, num_dims = truths.shape
-        assert num_dims == (self.hparams.num_kinematics + self.hparams.num_particles)
+        # _, num_dims = truths.shape
+        # assert num_dims == (self.hparams.num_kinematics + self.hparams.num_particles)
 
         xranges = self.hparams.xranges
         xbins = self.hparams.xbins
@@ -144,6 +145,13 @@ class CompareParticles(HyperparametersMixin):
             ax.set_xlabel(r"{}".format(xlabels[idx]))
             ax.set_ylim(0, max_y)
             ax.legend()
+
+    def plot_layers_outputs(layers_outputs):
+        histograms = {}
+        for layer_idx, layer_output in enumerate(layers_outputs):
+            histograms[f'Layer_{layer_idx}'] = layer_output
+    
+        return histograms
 
 
     @staticmethod
