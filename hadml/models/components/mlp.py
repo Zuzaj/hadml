@@ -1,5 +1,5 @@
 """Multilayer Perceptron (MLP) module."""
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 try:
     from itertools import pairwise
@@ -15,30 +15,22 @@ def build_linear_layers(
     input_dim: int,
     hidden_dims: List[int],
     output_dim: int,
-    layer_norm: Union[bool, int] = True,
-    batch_norm: Union[bool, int] = False,
+    layer_norm: bool = True,
     dropout: float = 0.0,
     last_activation: Optional[torch.nn.Module] = None,
     leaky_ratio: float = 0.2,
 ) -> List[nn.Module]:
-    if layer_norm:
-        layer_norm = 1
-    if batch_norm:
-        batch_norm = 1
 
     layer_list = [
         torch.nn.Linear(input_dim, hidden_dims[0]),
         torch.nn.LeakyReLU(leaky_ratio),
     ]
 
-    for i, (l0, l1) in enumerate(pairwise(hidden_dims)):
+    for l0, l1 in pairwise(hidden_dims):
         layer_list.append(torch.nn.Linear(l0, l1))
 
-        if layer_norm > 0 and i % layer_norm == 0:
+        if layer_norm:
             layer_list.append(torch.nn.LayerNorm(l1))
-
-        if batch_norm > 0 and i % batch_norm == 0:
-            layer_list.append(torch.nn.BatchNorm1d(l1))
 
         layer_list.append(torch.nn.LeakyReLU(leaky_ratio))
 
@@ -58,8 +50,7 @@ class MLPModule(nn.Module):
         input_dim: int,
         hidden_dims: List[int],
         output_dim: int,
-        layer_norm: Union[bool, int] = True,
-        batch_norm: Union[bool, int] = False,
+        layer_norm: bool = True,
         dropout: float = 0.0,
         last_activation: Optional[torch.nn.Module] = None,
     ):
@@ -68,18 +59,30 @@ class MLPModule(nn.Module):
         # build the linear model
         self.model = nn.Sequential(
             *build_linear_layers(
-                input_dim, hidden_dims, output_dim,
-                layer_norm=layer_norm,
-                batch_norm=batch_norm,
-                dropout=dropout,
-                last_activation=last_activation
+                input_dim, hidden_dims, output_dim, layer_norm, dropout, last_activation
             )
         )
 
+    def get_layer_outputs(self, x, *args) -> List[torch.Tensor]:
+        if len(args) > 0:
+            x = torch.cat((x,) + args, dim=1)
+        output_by_layer=[]
+        for layer in self.model:
+            x = layer(x)
+            output_by_layer.append(x)
+        return output_by_layer
+    
     def forward(self, x, *args) -> torch.Tensor:
         if len(args) > 0:
             x = torch.cat((x,) + args, dim=1)
+        # last_layer = self.model(x)
+        # output_layers = []
+        # for layer in self.model:
+        #     x = layer(x)
+        #     output_layers.append(x)
         return self.model(x)
+    
+
 
 
 class MLPParticleModule(nn.Module):
@@ -98,9 +101,7 @@ class MLPParticleModule(nn.Module):
         # build the linear model
         self.encoder = nn.Sequential(
             *build_linear_layers(
-                input_dim, hidden_dims, hidden_dims[-1],
-                layer_norm=layer_norm,
-                dropout=dropout,
+                input_dim, hidden_dims, hidden_dims[-1], layer_norm, dropout
             )
         )
         self.particle_type = nn.Sequential(
@@ -108,9 +109,9 @@ class MLPParticleModule(nn.Module):
                 hidden_dims[-1],
                 [particle_type_dim * 2],
                 particle_type_dim,
-                layer_norm=layer_norm,
-                dropout=dropout,
-                last_activation=torch.nn.LogSoftmax(dim=-1),
+                layer_norm,
+                dropout,
+                torch.nn.LogSoftmax(dim=-1),
             )
         )
 
@@ -119,9 +120,9 @@ class MLPParticleModule(nn.Module):
                 int(hidden_dims[-1] / num_output_particles),
                 [particle_type_dim * 2],
                 particle_type_dim,
-                layer_norm=layer_norm,
-                dropout=dropout,
-                last_activation=torch.nn.LogSoftmax(dim=-1),
+                layer_norm,
+                dropout,
+                torch.nn.LogSoftmax(dim=-1),
             )
         )
 
@@ -130,9 +131,9 @@ class MLPParticleModule(nn.Module):
                 hidden_dims[-1],
                 [kinematic_dim * 2],
                 kinematic_dim,
-                layer_norm=layer_norm,
-                dropout=dropout,
-                last_activation=torch.nn.Tanh(),
+                layer_norm,
+                dropout,
+                torch.nn.Tanh(),
             )
         )
 
@@ -177,12 +178,7 @@ class MLPOneHotEmbeddingModule(OneHotEmbeddingModule):
 
         # build the linear model
         self.model = nn.Sequential(
-            *build_linear_layers(vocab_size,
-                                 hidden_dims,
-                                 output_dim,
-                                 layer_norm=True,
-                                 dropout=dropout,
-                                 )
+            *build_linear_layers(vocab_size, hidden_dims, output_dim, True, dropout)
         )
 
     def forward(self, x) -> torch.Tensor:
@@ -204,12 +200,7 @@ class MLPTypeEmbeddingModule(nn.Module):
 
         # build the linear model
         self.model = nn.Sequential(
-            *build_linear_layers(embedding_dim,
-                                 hidden_dims,
-                                 output_dim,
-                                 layer_norm=True,
-                                 dropout=dropout,
-                                 )
+            *build_linear_layers(embedding_dim, hidden_dims, output_dim, True, dropout)
         )
 
     def forward(self, x) -> torch.Tensor:

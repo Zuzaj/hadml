@@ -31,7 +31,7 @@ def task_wrapper(task_func: Callable) -> Callable:
     - Logging the output dir
     """
 
-    def wrap(cfg: DictConfig, **kwargs):
+    def wrap(cfg: DictConfig):
 
         # apply extra utilities
         extras(cfg)
@@ -39,7 +39,7 @@ def task_wrapper(task_func: Callable) -> Callable:
         # execute the task
         try:
             start_time = time.time()
-            metric_dict, object_dict = task_func(cfg=cfg, **kwargs)
+            metric_dict, object_dict = task_func(cfg=cfg)
         except Exception as ex:
             log.exception("")  # save exception to `.log` file
             raise ex
