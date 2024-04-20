@@ -146,12 +146,57 @@ class CompareParticles(HyperparametersMixin):
             ax.set_ylim(0, max_y)
             ax.legend()
 
-    def plot_layers_outputs(layers_outputs):
-        histograms = {}
+    def _plot_layers_kinematics(self,layer_output, xbins, xlabels, xranges, fig, ax):
+        config = dict(alpha=0.5, lw=2, density=True)
+        for idx in range(self.hparams.num_kinematics):
+
+            xrange = xranges[idx] if xranges else (-1, 1)
+            xbin = xbins[idx] if xbins else 40
+            
+            bin_heights, _, _ = ax.hist(
+                layer_output[:, idx], bins=xbin, range=xrange, label="Layer Output", **config
+            )
+            max_y = np.nanmax(bin_heights) * 1.1
+            ax.set_xlabel(r"{}".format(xlabels[idx]))
+            if np.isfinite(max_y):  # Check if max_y is finite
+                ax.set_ylim(0, max_y)
+            else:
+                ax.set_ylim(0, 1) 
+            ax.legend()
+
+
+    def _plot_layers_outputs(self, layers_outputs):
+        out_images = {}
+        
+        xranges = self.hparams.xranges
+        xbins = self.hparams.xbins
+        xlabels = self.hparams.xlabels
+        
+        # outname = "dummy" if tags is None else tags
+        # if self.hparams.outdir is not None:
+        #     os.makedirs(self.hparams.outdir, exist_ok=True)
+        #     outname = os.path.join(self.hparams.outdir, outname)
+        # else:
+        #     outname = None
+        
+        needed_plot_count = self.hparams.num_kinematics * len(layers_outputs)
+        plot_row_count = len(layers_outputs)  # Each layer output in a separate row
+        plot_col_count = self.hparams.num_kinematics
+        fig, axs = create_plots(plot_row_count, plot_col_count)
+        
         for layer_idx, layer_output in enumerate(layers_outputs):
-            histograms[f'Layer_{layer_idx}'] = layer_output
-    
-        return histograms
+            for i in range(self.hparams.num_kinematics):
+                ax = axs[layer_idx]  # Corrected axs indexing
+                self._plot_layers_kinematics(layer_output, xbins, xlabels, xranges, fig, ax)
+        
+        # if outname is not None:
+        #     plt.savefig(outname + "-layers.png")
+        #     plt.savefig(outname + "-layers.pdf")
+        
+        out_images["layer_output"] = fig_to_array(fig)
+        plt.close("all")
+        
+        return out_images
 
 
     @staticmethod

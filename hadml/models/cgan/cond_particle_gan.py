@@ -269,12 +269,12 @@ class CondParticleGANModule(LightningModule):
             loss = self._discriminator_step(
                 cond_info, particle_type_data, x_generated, x_momenta, x_type_data
             )
-            self.log("Discriminator loss: ", loss, on_step=True, on_epoch=False, prog_bar=True)
+            # self.log("Discriminator loss: ", loss, on_step=True, on_epoch=False, prog_bar=True)
             return loss
 
         if optimizer_idx == 1:
             loss = self._generator_step(particle_type_data, x_generated)
-            self.log("Generator loss: ",loss, on_step=True, on_epoch=False, prog_bar=True)
+            # self.log("Generator loss: ",loss, on_step=True, on_epoch=False, prog_bar=True)
             return loss
         
     def _update_gumbel_temp(self):
@@ -483,18 +483,6 @@ class CondParticleGANModule(LightningModule):
         self.log("val_swd", perf["swd"], on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_particle_swd", perf["particle_swd"],on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_kinematic_swd", perf["kinematic_swd"],on_step=False, on_epoch=True, prog_bar=True)
-        layers_outputs = perf["layers_outputs"]
-
-        #here it thows error that plot_layers_outputs() got 2 args
-        histograms = self.comparison_fn.plot_layers_outputs(layers_outputs)
-        if self.logger and self.logger.experiment is not None:
-            log_images(
-                    self.logger,
-                    "Outputs for each layer",
-                    images=list(histograms.values()),
-                    caption=list(histograms.keys()),
-                )
-
         return perf
 
     def validation_epoch_end(self, outputs: List[Any]):
@@ -578,11 +566,15 @@ class CondParticleGANModule(LightningModule):
                     if len(cond_info) == 0
                     else np.concatenate((cond_info, perf["cond_info"]))
                 )
-                # layers_outputs = (
-                #     perf["layers_outputs"]
-                #     if len(cond_info) == 0
-                #     else layers_outputs.append(perf["layers_outputs"])
-                # )
+                layers_outputs = outputs[-1]['layers_outputs']
+                histograms = self.comparison_fn._plot_layers_outputs(layers_outputs)
+                if self.logger and self.logger.experiment is not None:
+                    log_images(
+                        self.logger,
+                        "Outputs for each layer",
+                        images=list(histograms.values()),
+                        caption=list(histograms.keys()),
+                )
 
             outname = f"val-{self.current_epoch:02d}"
             
